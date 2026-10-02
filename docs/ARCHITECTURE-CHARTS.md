@@ -1,7 +1,7 @@
 # WhatsApp-Frontend — Architecture Charts
 
-> Repository: `appolon1908/WhatsApp-Frontend`  
-> Baseline branch: `development`  
+> Repository: `appolon1908/WhatsApp-Frontend`
+> Baseline branch: `development`
 > Repository-local visual architecture. Update these diagrams when implementation or authority changes.
 
 ## 1. System context
