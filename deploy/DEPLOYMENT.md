@@ -47,19 +47,33 @@ Run the browser acceptance suite in a Playwright 1.56.1 container (or install it
 
 2026-10-08 local evidence: WhatsApp backend unit tests **4/4**, Evolution backend **5/5**, dashboard tests **5/5**, Nginx parser valid; live browser acceptance checks passed, including positive and negative consent/campaign tests. No production provider testing was performed.
 
-## GoDaddy, TLS and private desktop access
+## GoDaddy, HTTPS, public authentication and private desktop access
 
-GoDaddy: `whatsapp.codestra.co CNAME codestra.agency.`, TTL 600. Caddy on `s1-middleware` (`10.0.0.73`) forwards to `10.0.0.218:3082` only when `remote_ip` is `10.0.0.0/24` (LAN) or `100.64.0.0/10` (Tailscale). Other traffic returns HTTP 403. Let's Encrypt certificate issuance and full certificate verification succeeded. `codestra.agency` continues to return HTTP 200.
+GoDaddy DNS points `whatsapp.codestra.co CNAME codestra.agency.`, TTL 600, to the existing verified Caddy ingress on `s1-middleware` (`10.0.0.73` private IP). The public certificate is valid. The upstream private frontend remains `10.0.0.218:3082`.
 
-```caddyfile
-whatsapp.codestra.co {
-    @trusted remote_ip 10.0.0.0/24 100.64.0.0/10
-    handle @trusted { reverse_proxy 10.0.0.218:3082 }
-    handle { respond "Forbidden" 403 }
-}
-```
+**External visitors:** HTTP 401 with the browser's standard HTTPS Basic Authentication prompt. A strong randomly generated password is stored only on the Middleware server at `/etc/codestra/secrets/whatsapp-dashboard-access` with mode 0600. The login name is `codestra-admin`. To access it securely, open a console/SSH session **on s1-middleware** and run `sudo cat /etc/codestra/secrets/whatsapp-dashboard-access`. Do not paste credentials into PRs, screenshots, this chat, source code, or logs. Rotate/remove this temporary access method when approved Keycloak SSO is available. Caddy strips `Authorization` before forwarding either frontend or Middleware requests. Unauthenticated external requests must receive HTTP 401; authenticated requests return HTTP 200.
 
-The `dev-desktop` user `codestra` has a Chrome desktop launcher, applications-menu entry and graphical-login autostart. The desktop `/etc/hosts` maps the hostname to the private Caddy edge `10.0.0.73`; Chrome and TLS verified HTTP 200. **A graphical login is required to show the app window on that user's desktop**: at last verification the only active graphical session was the GDM login greeter. Do not launch a user application in the greeter account or bypass the login screen.
+**Internal users:** trusted LAN `10.0.0.0/24` and Tailscale `100.64.0.0/10` continue to use the private no-password route. No external recipient sends or provider effects can be initiated from the frontend.
+
+Caddy has two distinct upstreams for this hostname:
+
+- Normal site and the only approved policy validation routes: `10.0.0.218:3082` (frontend Nginx; both backends are private Docker services).
+- `GET /api/integrations/middleware`: Caddy rewrites to `/readyz` and reverse-proxies directly to `127.0.0.1:8000` on the **Middleware server**, giving live read-only Middleware V3 readiness. POST to this path is not an allowed integration operation.
+
+The frontend uses `fetch(..., credentials:"same-origin")` so cached HTTPS Basic credentials accompany its same-origin API requests. This does **not** send the password to upstream Node or Middleware services because Caddy removes the authentication header.
+
+The `dev-desktop` account `codestra` has a Chrome app launcher, applications-menu entry, and graphical-login autostart. Desktop DNS maps `whatsapp.codestra.co` to private Caddy edge `10.0.0.73`; Chrome and TLS verified HTTP 200, with Middleware V3 connection shown as Online. **A graphical login is required for the application window to appear on the desktop**. Do not sign into the login greeter as a service account or bypass workstation login.
+
+## Authentication and security acceptance criteria
+
+- Public unauthenticated GET `/` and `/api/integrations/middleware`: HTTP 401
+- Public authenticated GET `/` and `/api/integrations/middleware`: HTTP 200
+- Private authorized browser: application API Online, adapter Online, Middleware Online, message delivery Locked
+- `POST /api/platform/v1/whatsapp/messages` remains HTTP 404 even after access login
+- Caddy `Authorization` request header must be removed at both upstream boundaries
+- `codestra.agency` remains HTTP 200
+
+These checks certify accessible **safe-mode staging**, not authenticated per-agent identity, customer data security or production WhatsApp operations.
 
 ## Unfinished production gates
 
