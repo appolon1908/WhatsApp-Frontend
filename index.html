@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Codestra WhatsApp | Staging Console</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="mark">C</span><span><strong>CODESTRA</strong><small>WhatsApp Workspace</small></span></div>
+    <div class="badge">STAGING · SEND DISABLED</div>
+  </header>
+  <main class="wrap">
+    <div class="hero">
+      <div><p class="eyebrow">CHANNEL OPERATIONS</p><h1>WhatsApp Control Center</h1><p class="lead">Read-only service verification. Messaging remains locked until identity, consent, and Middleware command approval are certified.</p></div>
+      <button type="button" id="refresh">↻ &nbsp;Refresh status</button>
+    </div>
+    <section aria-labelledby="service-title">
+      <div class="titlebar"><h2 id="service-title">Live service diagnostics</h2><span id="last-updated" aria-live="polite">Checking…</span></div>
+      <div class="grid">
+        <article class="card"><p class="card-label">Application API</p><strong class="state" id="app-health">Checking…</strong><p class="desc">Business API reachability</p></article>
+        <article class="card"><p class="card-label">Provider adapter</p><strong class="state" id="adapter-health">Checking…</strong><p class="desc">Internal Evolution / Meta adapter</p></article>
+        <article class="card"><p class="card-label">Send permissions</p><strong class="state locked" id="send-mode">Disabled</strong><p class="desc">External messages are blocked in staging</p></article>
+        <article class="card"><p class="card-label">Middleware command</p><strong class="state" id="command-mode">Checking…</strong><p class="desc">Reviewed V3 registry entry is required</p></article>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="limits-title"><div class="panel-copy"><p class="eyebrow">DEPLOYMENT BOUNDARY</p><h2 id="limits-title">Safe by default</h2><p>This workspace is a staging status console, <strong>not a live inbox</strong>. Agent authentication, conversation persistence, message delivery, and production enablement are not available through this page.</p></div>
+      <div class="pillbox"><span>✓ Health checks</span><span>✓ API readiness</span><span>✓ No customer sends</span><span>✕ Live messaging</span></div>
+    </section>
+    <p class="footnote">Codestra · WhatsApp business API → Middleware V3 → provider adapter. Internal APIs and credentials remain private.</p>
+  </main>
+</body>
+</html>
