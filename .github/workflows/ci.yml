@@ -1,0 +1,27 @@
+name: Frontend CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - development
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: [self-hosted, Windows, X64, appolon, whatsapp-frontend]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Use Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build production bundle
+        run: npm run build
