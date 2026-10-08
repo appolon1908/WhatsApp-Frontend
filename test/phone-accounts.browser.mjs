@@ -19,8 +19,9 @@ if (!process.env.DASHBOARD_URL) {
   await page.locator("#phone-provider").selectOption("meta");
   assert.equal(await page.locator("#phone-meta-fields").isVisible(),true);
   assert.equal(await page.locator("#phone-evolution-fields").isVisible(),false);
+  await page.locator("#phone-token").fill("incorrect-key-for-browser-test-12345");
   await page.locator("#phone-access-form button").click();
-  assert.match(await page.locator("#phone-feedback").innerText(),/valid tenant and private admin key/);
+  await page.getByText(/Administrator key rejected/).waitFor({timeout:9000});
   assert.equal(await page.locator("#phone-token").inputValue(),"");
   assert.equal(sendRequests,0);
   assert.deepEqual(errors,[]);
