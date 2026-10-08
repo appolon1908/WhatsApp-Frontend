@@ -129,7 +129,9 @@ function Sidebar({ page, setPage, identity }) {
   );
 }
 
-function Topbar({ title, identity, onRefresh, refreshing }) {
+function Topbar({ title, identity, onRefresh, refreshing, safeMode, unreadCount = 0 }) {
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationCount = Number(unreadCount || 0) + (safeMode ? 1 : 0);
   return (
     <header className="topbar">
       <div>
@@ -137,8 +139,28 @@ function Topbar({ title, identity, onRefresh, refreshing }) {
         <h2>{title}</h2>
       </div>
       <div className="topbar-actions">
-        <button className="icon-button" title="Notifications"><Bell size={18} /></button>
-        <button className="icon-button" onClick={onRefresh} title="Refresh">
+        <div className="notification-wrap">
+          <button
+            className="icon-button notification-button"
+            title="Notifications"
+            aria-label="Notifications"
+            aria-expanded={showNotifications}
+            onClick={() => setShowNotifications((value) => !value)}
+          >
+            <Bell size={18} />
+            {notificationCount > 0 && <span className="notification-count">{Math.min(notificationCount, 99)}</span>}
+          </button>
+          {showNotifications && (
+            <div className="notification-popover">
+              <div className="popover-head"><strong>Workspace status</strong><button onClick={() => setShowNotifications(false)}>×</button></div>
+              {safeMode && <div className="notification-item warning"><ShieldCheck size={16} /><div><strong>Safe mode active</strong><span>Outbound provider effects are locked.</span></div></div>}
+              {unreadCount > 0
+                ? <div className="notification-item"><MessageCircleMore size={16} /><div><strong>{unreadCount} unread messages</strong><span>Open Inbox to review customer activity.</span></div></div>
+                : <div className="notification-item"><CheckCircle2 size={16} /><div><strong>Inbox caught up</strong><span>No unread customer messages.</span></div></div>}
+            </div>
+          )}
+        </div>
+        <button className="icon-button" onClick={onRefresh} title="Refresh" aria-label="Refresh workspace">
           <RefreshCw size={18} className={refreshing ? "spin" : ""} />
         </button>
         <div className="profile-badge">
@@ -212,23 +234,57 @@ function OverviewPage({ dashboard, conversations, onOpenInbox, safeMode }) {
   );
 }
 
-function InboxPage({ conversations, refreshConversations }) {
+function InboxPage({ conversations, refreshConversations, safeMode }) {
   const [selectedId, setSelectedId] = useState(conversations?.[0]?.conversation_id || null);
   const [timeline, setTimeline] = useState([]);
   const [conversation, setConversation] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [actionBusy, setActionBusy] = useState("");
   const [sendText, setSendText] = useState("");
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState("");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [aiBusy, setAiBusy] = useState("");
+  const [aiPreview, setAiPreview] = useState("");
+  const [aiLanguage, setAiLanguage] = useState("Spanish");
+
+  const filteredConversations = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (conversations || []).filter((item) => {
+      const matchesSearch = !needle || [item.customer_identity, item.business_identity, item.status]
+        .some((value) => String(value || "").toLowerCase().includes(needle));
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "unread" && Number(item.unread_count || 0) > 0) ||
+        (filter === "waiting" && item.status === "waiting_agent") ||
+        (filter === "assigned" && Boolean(item.assigned_to));
+      return matchesSearch && matchesFilter;
+    });
+  }, [conversations, query, filter]);
 
   const selected = useMemo(
-    () => conversations?.find((item) => item.conversation_id === selectedId) || conversations?.[0] || null,
-    [conversations, selectedId]
+    () => filteredConversations.find((item) => item.conversation_id === selectedId)
+      || conversations?.find((item) => item.conversation_id === selectedId)
+      || filteredConversations[0]
+      || null,
+    [filteredConversations, conversations, selectedId]
+  );
+
+  const unreadTotal = useMemo(
+    () => (conversations || []).reduce((sum, item) => sum + Number(item.unread_count || 0), 0),
+    [conversations]
   );
 
   useEffect(() => {
-    if (!selected?.conversation_id) return;
+    if (!selected?.conversation_id) {
+      setConversation(null);
+      setTimeline([]);
+      return;
+    }
     setSelectedId(selected.conversation_id);
     setLoading(true);
+    setNotice("");
     Promise.all([api.conversation(selected.conversation_id), api.timeline(selected.conversation_id)])
       .then(([detail, line]) => {
         setConversation(detail);
@@ -240,29 +296,110 @@ function InboxPage({ conversations, refreshConversations }) {
   }, [selected?.conversation_id]);
 
   async function mutate(action) {
-    if (!conversation) return;
+    if (!conversation || actionBusy) return;
+    const confirmation = {
+      resolve: "Resolve this conversation? The customer can still be reopened later.",
+      reopen: "Reopen this conversation and return it to active handling?",
+      escalate: "Escalate this conversation to a supervisor?",
+      pause: "Pause automation for this conversation?",
+      resume: "Resume automation for this conversation?"
+    }[action];
+    if (confirmation && !window.confirm(confirmation)) return;
+
+    setActionBusy(action);
+    setNotice("");
     try {
       setError(null);
       let updated;
       if (action === "claim") updated = await api.claim(conversation.conversation_id, conversation.version);
       if (action === "resolve") updated = await api.resolve(conversation.conversation_id, conversation.version, "agent_resolved");
       if (action === "reopen") updated = await api.reopen(conversation.conversation_id, conversation.version, "agent_reopened");
+      if (action === "escalate") updated = await api.escalate(conversation.conversation_id, conversation.version, "agent_escalated");
+      if (action === "pause") updated = await api.setAutomation(conversation.conversation_id, "pause", conversation.version, "agent_paused");
+      if (action === "resume") updated = await api.setAutomation(conversation.conversation_id, "resume", conversation.version, "agent_resumed");
       setConversation(updated);
+      setNotice({
+        claim: "Conversation claimed.",
+        resolve: "Conversation resolved.",
+        reopen: "Conversation reopened.",
+        escalate: "Conversation escalated.",
+        pause: "Automation paused.",
+        resume: "Automation resumed."
+      }[action] || "Conversation updated.");
       await refreshConversations();
     } catch (e) {
       setError(e);
+    } finally {
+      setActionBusy("");
+    }
+  }
+
+
+  async function runAiDraft(action) {
+    if (!conversation || aiBusy) return;
+    if (["rewrite", "shorter", "professional", "translate"].includes(action) && !sendText.trim()) {
+      setError(Object.assign(new Error("Write or generate a draft first, then use this AI action."), { code: "draft_required" }));
+      return;
+    }
+    setAiBusy(action);
+    setAiPreview("");
+    setNotice("");
+    try {
+      setError(null);
+      const latestInbound = [...timeline].reverse().find((entry) => entry.type === "message" && entry.data?.direction === "inbound");
+      const accepted = await api.createAiDraft({
+        conversation_id: conversation.conversation_id,
+        action,
+        draft: sendText.trim() || undefined,
+        language: action === "translate" ? aiLanguage : undefined,
+        knowledge_query: action === "knowledge_answer"
+          ? (latestInbound?.data?.content?.text || "Answer the customer's latest question using only approved company knowledge.")
+          : undefined
+      });
+      const commandId = accepted.command_id;
+      if (!commandId) throw Object.assign(new Error("AI draft command was accepted without a command ID."), { code: "ai_command_missing" });
+
+      let result = null;
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        try {
+          result = await api.aiDraftResult(commandId);
+          break;
+        } catch (e) {
+          if (![409, 425].includes(e.status)) throw e;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
+      if (!result) throw Object.assign(new Error("AI draft is still processing. Try again in a moment."), { code: "ai_draft_pending" });
+
+      const payload = result.middleware || {};
+      const proposal =
+        payload.output?.proposal ||
+        payload.result?.output?.proposal ||
+        payload.proposal ||
+        payload.result?.proposal ||
+        "";
+      if (!proposal) throw Object.assign(new Error("AI completed without a usable proposal."), { code: "ai_proposal_missing" });
+
+      setAiPreview(String(proposal));
+      setNotice("AI produced a draft for human review. Nothing was sent.");
+    } catch (e) {
+      setError(e);
+    } finally {
+      setAiBusy("");
     }
   }
 
   async function sendMessage(event) {
     event.preventDefault();
-    if (!conversation || !sendText.trim()) return;
+    if (!conversation || !sendText.trim() || safeMode) return;
+    setActionBusy("send");
+    setNotice("");
     try {
       setError(null);
       const result = await api.contacts({ q: conversation.customer_identity, limit: 20 });
       const contact = (result.items || []).find((item) => item.phone === conversation.customer_identity);
       if (!contact) {
-        const e = new Error("Create a contact record with consent before sending to this conversation.");
+        const e = new Error("Create a consent-aware contact record before sending to this number.");
         e.code = "contact_record_required";
         throw e;
       }
@@ -272,28 +409,64 @@ function InboxPage({ conversations, refreshConversations }) {
         message: { type: "text", text: sendText.trim() }
       });
       setSendText("");
+      setNotice("Message accepted by the governed WhatsApp API.");
+      const line = await api.timeline(conversation.conversation_id);
+      setTimeline(line.items || []);
     } catch (e) {
       setError(e);
+    } finally {
+      setActionBusy("");
     }
   }
 
   return (
-    <div className="inbox-shell">
+    <div className="inbox-shell professional-inbox">
       <section className="inbox-list panel">
-        <div className="panel-head compact"><div><h3>Inbox</h3><p>{conversations?.length || 0} conversations</p></div><Search size={17} /></div>
+        <div className="panel-head compact">
+          <div><h3>Inbox</h3><p>{conversations?.length || 0} conversations · {unreadTotal} unread</p></div>
+        </div>
+        <div className="inbox-controls">
+          <div className="search-box compact-search">
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search customer, number or status"
+              aria-label="Search conversations"
+            />
+          </div>
+          <div className="filter-chips" role="group" aria-label="Conversation filters">
+            {[
+              ["all", "All"],
+              ["unread", "Unread"],
+              ["waiting", "Waiting"],
+              ["assigned", "Assigned"]
+            ].map(([id, label]) => (
+              <button key={id} className={cx("filter-chip", filter === id && "active")} onClick={() => setFilter(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="conversation-list-scroll">
-          {(conversations || []).map((item) => (
+          {filteredConversations.map((item) => (
             <button
               key={item.conversation_id}
               className={cx("conversation-card", selected?.conversation_id === item.conversation_id && "selected")}
               onClick={() => setSelectedId(item.conversation_id)}
+              aria-pressed={selected?.conversation_id === item.conversation_id}
             >
               <div className="avatar customer">{initials(item.customer_identity)}</div>
-              <div className="grow"><strong>{item.customer_identity}</strong><span>{item.status.replaceAll("_", " ")}</span></div>
+              <div className="grow"><strong>{item.customer_identity}</strong><span>{String(item.status || "unknown").replaceAll("_", " ")}</span></div>
               <div className="conversation-card-meta"><time>{formatTime(item.updated_at)}</time>{item.unread_count > 0 && <b>{item.unread_count}</b>}</div>
             </button>
           ))}
-          {!conversations?.length && <EmptyState title="Inbox is clear" body="New conversations will appear when inbound events are processed." />}
+          {!filteredConversations.length && (
+            <EmptyState
+              title={query || filter !== "all" ? "No matching conversations" : "Inbox is clear"}
+              body={query || filter !== "all" ? "Try another search or filter." : "New conversations will appear when inbound events are processed."}
+            />
+          )}
         </div>
       </section>
 
@@ -304,14 +477,38 @@ function InboxPage({ conversations, refreshConversations }) {
           <>
             <div className="chat-head">
               <div className="avatar customer">{initials(selected.customer_identity)}</div>
-              <div className="grow"><h3>{selected.customer_identity}</h3><span>{selected.business_identity}</span></div>
+              <div className="grow">
+                <h3>{selected.customer_identity}</h3>
+                <span>{selected.business_identity || "WhatsApp customer"}</span>
+              </div>
               <StatusPill value={conversation?.status || selected.status} />
-              {conversation?.status === "resolved"
-                ? <Button kind="ghost" onClick={() => mutate("reopen")}>Reopen</Button>
-                : <Button kind="ghost" onClick={() => mutate("resolve")}>Resolve</Button>}
             </div>
+
+            <div className="conversation-actions" role="toolbar" aria-label="Conversation actions">
+              <Button kind="secondary" onClick={() => mutate("claim")} disabled={!conversation || conversation.assigned_to || Boolean(actionBusy)}>
+                <UserRoundCheck size={15} /> {conversation?.assigned_to ? "Assigned" : "Claim"}
+              </Button>
+              <Button kind="ghost" onClick={() => mutate(conversation?.automation_paused ? "resume" : "pause")} disabled={!conversation || Boolean(actionBusy)}>
+                <PauseCircle size={15} /> {conversation?.automation_paused ? "Resume automation" : "Pause automation"}
+              </Button>
+              <Button kind="ghost" onClick={() => mutate("escalate")} disabled={!conversation || conversation.status === "escalated" || Boolean(actionBusy)}>
+                <CircleAlert size={15} /> Escalate
+              </Button>
+              {conversation?.status === "resolved"
+                ? <Button kind="ghost" onClick={() => mutate("reopen")} disabled={Boolean(actionBusy)}>Reopen</Button>
+                : <Button kind="ghost" onClick={() => mutate("resolve")} disabled={!conversation || Boolean(actionBusy)}>Resolve</Button>}
+            </div>
+
+            {safeMode && (
+              <div className="safety-banner compact-banner">
+                <ShieldCheck size={17} />
+                <div><strong>Outbound messaging is locked</strong><span>Safe mode is active. You can review and manage conversations without sending provider effects.</span></div>
+              </div>
+            )}
+            {notice && <div className="success-banner"><CheckCircle2 size={17} /><span>{notice}</span></div>}
             <ErrorBanner error={error} />
-            <div className="timeline">
+
+            <div className="timeline" aria-live="polite">
               {loading ? <LoadingBlock /> : timeline.filter((entry) => entry.type === "message").map((entry, index) => {
                 const message = entry.data;
                 return (
@@ -325,9 +522,63 @@ function InboxPage({ conversations, refreshConversations }) {
               })}
               {!loading && !timeline.some((entry) => entry.type === "message") && <EmptyState title="No messages yet" body="The conversation timeline has no materialized messages." />}
             </div>
-            <form className="composer" onSubmit={sendMessage}>
-              <input value={sendText} onChange={(e) => setSendText(e.target.value)} placeholder="Write a reply…" />
-              <Button type="submit" disabled={!sendText.trim()}><Send size={17} /> Send</Button>
+
+
+            <section className="ai-assistant-panel" aria-label="AI reply assistant">
+              <div className="ai-assistant-head">
+                <div>
+                  <strong><Sparkles size={16} /> AI reply assistant</strong>
+                  <span>Draft-only · human review required · never auto-sends</span>
+                </div>
+                {aiBusy && <span className="ai-working"><RefreshCw size={14} className="spin" /> Working…</span>}
+              </div>
+              <div className="ai-actions">
+                <Button kind="secondary" type="button" onClick={() => runAiDraft("suggest_reply")} disabled={Boolean(aiBusy)}>Suggest reply</Button>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("rewrite")} disabled={Boolean(aiBusy) || !sendText.trim()}>Rewrite</Button>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("shorter")} disabled={Boolean(aiBusy) || !sendText.trim()}>Shorter</Button>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("professional")} disabled={Boolean(aiBusy) || !sendText.trim()}>More professional</Button>
+                <div className="ai-translate">
+                  <select value={aiLanguage} onChange={(e) => setAiLanguage(e.target.value)} aria-label="Translation language">
+                    <option>Spanish</option><option>English</option><option>French</option><option>Haitian Creole</option>
+                  </select>
+                  <Button kind="ghost" type="button" onClick={() => runAiDraft("translate")} disabled={Boolean(aiBusy) || !sendText.trim()}>Translate</Button>
+                </div>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("summarize")} disabled={Boolean(aiBusy)}>Summarize</Button>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("knowledge_answer")} disabled={Boolean(aiBusy)} title="Uses approved knowledge context when configured; otherwise the model must say what needs verification.">Knowledge answer</Button>
+              </div>
+              {aiPreview && (
+                <div className="ai-preview">
+                  <div><strong>AI draft</strong><span>Review and edit before sending.</span></div>
+                  <p>{aiPreview}</p>
+                  <div className="ai-preview-actions">
+                    <Button type="button" onClick={() => { setSendText(aiPreview.slice(0, 4096)); setAiPreview(""); }}>Use this draft</Button>
+                    <Button kind="ghost" type="button" onClick={() => setAiPreview("")}>Discard</Button>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <form className="composer professional-composer" onSubmit={sendMessage}>
+              <div className="composer-field">
+                <textarea
+                  value={sendText}
+                  onChange={(e) => setSendText(e.target.value.slice(0, 4096))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  placeholder={safeMode ? "Outbound messaging is locked by safe mode" : "Write a reply…"}
+                  disabled={safeMode || actionBusy === "send"}
+                  rows="2"
+                  aria-label="Message reply"
+                />
+                <small>{sendText.length}/4096 · Enter to send · Shift+Enter for new line</small>
+              </div>
+              <Button type="submit" disabled={safeMode || !sendText.trim() || actionBusy === "send"}>
+                <Send size={17} /> {actionBusy === "send" ? "Sending…" : "Send"}
+              </Button>
             </form>
           </>
         )}
@@ -339,10 +590,10 @@ function InboxPage({ conversations, refreshConversations }) {
             <div className="context-profile">
               <div className="avatar xl">{initials(conversation.customer_identity)}</div>
               <h3>{conversation.customer_identity}</h3>
-              <span>{conversation.business_identity}</span>
+              <span>{conversation.business_identity || "WhatsApp customer"}</span>
             </div>
             <div className="context-section">
-              <label>Status</label><StatusPill value={conversation.status} />
+              <label>Conversation status</label><StatusPill value={conversation.status} />
             </div>
             <div className="context-grid">
               <div><span>Unread</span><strong>{conversation.unread_count || 0}</strong></div>
@@ -350,9 +601,12 @@ function InboxPage({ conversations, refreshConversations }) {
               <div><span>Assigned to</span><strong>{conversation.assigned_to || "Unassigned"}</strong></div>
               <div><span>Automation</span><strong>{conversation.automation_paused ? "Paused" : "Active"}</strong></div>
             </div>
-            <Button kind="secondary" onClick={() => mutate("claim")} disabled={conversation.assigned_to}>
-              <UserRoundCheck size={16} /> Claim conversation
-            </Button>
+            <div className="context-help">
+              <strong>Agent workflow</strong>
+              <p>{conversation.assigned_to
+                ? "This conversation is owned. Use escalation, automation controls, resolve/reopen, and the timeline to manage it."
+                : "Claim the conversation before working it so ownership is explicit and auditable."}</p>
+            </div>
           </>
         ) : <EmptyState title="Conversation context" body="Customer and assignment details will appear here." />}
       </aside>
@@ -615,11 +869,11 @@ export default function App() {
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} identity={profile ? { ...identity, subject: profile.subject, tenantId: profile.tenant_id, roles: profile.roles } : identity} />
       <div className="main-shell">
-        <Topbar title={title} identity={profile ? { ...identity, subject: profile.subject, roles: profile.roles } : identity} onRefresh={refresh} refreshing={refreshing} />
+        <Topbar title={title} identity={profile ? { ...identity, subject: profile.subject, roles: profile.roles } : identity} onRefresh={refresh} refreshing={refreshing} safeMode={dashboard?.safe_mode} unreadCount={(conversations || []).reduce((sum, item) => sum + Number(item.unread_count || 0), 0)} />
         <main className="content">
           <ErrorBanner error={error} onRetry={refresh} />
           {page === "overview" && <OverviewPage dashboard={dashboard} conversations={conversations} safeMode={dashboard?.safe_mode} onOpenInbox={() => setPage("inbox")} />}
-          {page === "inbox" && <InboxPage conversations={conversations} refreshConversations={refresh} />}
+          {page === "inbox" && <InboxPage conversations={conversations} refreshConversations={refresh} safeMode={dashboard?.safe_mode} />}
           {page === "contacts" && <ContactsPage />}
           {page === "templates" && <TemplatesPage />}
           {page === "campaigns" && <CampaignsPage />}
