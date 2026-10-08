@@ -79,7 +79,7 @@
    event.preventDefault();
    adminKey=$("phone-token").value.trim();tenant=$("phone-tenant").value.trim();
    if(adminKey.length<24||!/^[-_A-Za-z0-9]{2,64}$/.test(tenant)){feedback("Enter a valid tenant and private admin key.",true);return;}
-   try{await load();$("phone-token").value="";}catch(e){adminKey="";feedback(e.message,true);}
+   try{await load();$("phone-token").value="";}catch(e){adminKey="";$("phone-token").value="";feedback(e.message,true);}
  }
  async function create(event){
    event.preventDefault();
