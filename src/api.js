@@ -82,6 +82,10 @@ export const api = {
     body: { expected_version: expectedVersion, reason }
   }).then((r) => r.data),
 
+  createAiDraft: (body) => request("/platform/v1/whatsapp/ai/drafts", { method: "POST", body }).then((r) => r.data),
+  aiDraft: (id) => request("/platform/v1/whatsapp/ai/drafts/" + encodeURIComponent(id)).then((r) => r.data),
+  aiDraftResult: (id) => request("/platform/v1/whatsapp/ai/drafts/" + encodeURIComponent(id) + "/result").then((r) => r.data),
+
   contacts: (query) => request("/platform/v1/whatsapp/contacts" + queryString(query)).then((r) => r.data),
   contact: (id) => request("/platform/v1/whatsapp/contacts/" + encodeURIComponent(id)).then((r) => r.data),
   createContact: (body) => request("/platform/v1/whatsapp/contacts", { method: "POST", body }).then((r) => r.data),

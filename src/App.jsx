@@ -245,6 +245,9 @@ function InboxPage({ conversations, refreshConversations, safeMode }) {
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [aiBusy, setAiBusy] = useState("");
+  const [aiPreview, setAiPreview] = useState("");
+  const [aiLanguage, setAiLanguage] = useState("Spanish");
 
   const filteredConversations = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -328,6 +331,61 @@ function InboxPage({ conversations, refreshConversations, safeMode }) {
       setError(e);
     } finally {
       setActionBusy("");
+    }
+  }
+
+
+  async function runAiDraft(action) {
+    if (!conversation || aiBusy) return;
+    if (["rewrite", "shorter", "professional", "translate"].includes(action) && !sendText.trim()) {
+      setError(Object.assign(new Error("Write or generate a draft first, then use this AI action."), { code: "draft_required" }));
+      return;
+    }
+    setAiBusy(action);
+    setAiPreview("");
+    setNotice("");
+    try {
+      setError(null);
+      const latestInbound = [...timeline].reverse().find((entry) => entry.type === "message" && entry.data?.direction === "inbound");
+      const accepted = await api.createAiDraft({
+        conversation_id: conversation.conversation_id,
+        action,
+        draft: sendText.trim() || undefined,
+        language: action === "translate" ? aiLanguage : undefined,
+        knowledge_query: action === "knowledge_answer"
+          ? (latestInbound?.data?.content?.text || "Answer the customer's latest question using only approved company knowledge.")
+          : undefined
+      });
+      const commandId = accepted.command_id;
+      if (!commandId) throw Object.assign(new Error("AI draft command was accepted without a command ID."), { code: "ai_command_missing" });
+
+      let result = null;
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        try {
+          result = await api.aiDraftResult(commandId);
+          break;
+        } catch (e) {
+          if (![409, 425].includes(e.status)) throw e;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
+      if (!result) throw Object.assign(new Error("AI draft is still processing. Try again in a moment."), { code: "ai_draft_pending" });
+
+      const payload = result.middleware || {};
+      const proposal =
+        payload.output?.proposal ||
+        payload.result?.output?.proposal ||
+        payload.proposal ||
+        payload.result?.proposal ||
+        "";
+      if (!proposal) throw Object.assign(new Error("AI completed without a usable proposal."), { code: "ai_proposal_missing" });
+
+      setAiPreview(String(proposal));
+      setNotice("AI produced a draft for human review. Nothing was sent.");
+    } catch (e) {
+      setError(e);
+    } finally {
+      setAiBusy("");
     }
   }
 
@@ -464,6 +522,41 @@ function InboxPage({ conversations, refreshConversations, safeMode }) {
               })}
               {!loading && !timeline.some((entry) => entry.type === "message") && <EmptyState title="No messages yet" body="The conversation timeline has no materialized messages." />}
             </div>
+
+
+            <section className="ai-assistant-panel" aria-label="AI reply assistant">
+              <div className="ai-assistant-head">
+                <div>
+                  <strong><Sparkles size={16} /> AI reply assistant</strong>
+                  <span>Draft-only · human review required · never auto-sends</span>
+                </div>
+                {aiBusy && <span className="ai-working"><RefreshCw size={14} className="spin" /> Working…</span>}
+              </div>
+              <div className="ai-actions">
+                <Button kind="secondary" type="button" onClick={() => runAiDraft("suggest_reply")} disabled={Boolean(aiBusy)}>Suggest reply</Button>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("rewrite")} disabled={Boolean(aiBusy) || !sendText.trim()}>Rewrite</Button>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("shorter")} disabled={Boolean(aiBusy) || !sendText.trim()}>Shorter</Button>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("professional")} disabled={Boolean(aiBusy) || !sendText.trim()}>More professional</Button>
+                <div className="ai-translate">
+                  <select value={aiLanguage} onChange={(e) => setAiLanguage(e.target.value)} aria-label="Translation language">
+                    <option>Spanish</option><option>English</option><option>French</option><option>Haitian Creole</option>
+                  </select>
+                  <Button kind="ghost" type="button" onClick={() => runAiDraft("translate")} disabled={Boolean(aiBusy) || !sendText.trim()}>Translate</Button>
+                </div>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("summarize")} disabled={Boolean(aiBusy)}>Summarize</Button>
+                <Button kind="ghost" type="button" onClick={() => runAiDraft("knowledge_answer")} disabled={Boolean(aiBusy)} title="Uses approved knowledge context when configured; otherwise the model must say what needs verification.">Knowledge answer</Button>
+              </div>
+              {aiPreview && (
+                <div className="ai-preview">
+                  <div><strong>AI draft</strong><span>Review and edit before sending.</span></div>
+                  <p>{aiPreview}</p>
+                  <div className="ai-preview-actions">
+                    <Button type="button" onClick={() => { setSendText(aiPreview.slice(0, 4096)); setAiPreview(""); }}>Use this draft</Button>
+                    <Button kind="ghost" type="button" onClick={() => setAiPreview("")}>Discard</Button>
+                  </div>
+                </div>
+              )}
+            </section>
 
             <form className="composer professional-composer" onSubmit={sendMessage}>
               <div className="composer-field">

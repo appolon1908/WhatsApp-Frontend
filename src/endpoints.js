@@ -42,6 +42,10 @@ export const apiPaths = Object.freeze({
   reopen: (conversationId) => whatsapp + "/conversations/" + encodeURIComponent(conversationId) + "/reopen",
   automation: (conversationId, action) => whatsapp + "/conversations/" + encodeURIComponent(conversationId) + "/automation/" + encodeURIComponent(action),
 
+  aiDrafts: whatsapp + "/ai/drafts",
+  aiDraft: (commandId) => whatsapp + "/ai/drafts/" + encodeURIComponent(commandId),
+  aiDraftResult: (commandId) => whatsapp + "/ai/drafts/" + encodeURIComponent(commandId) + "/result",
+
   deadLetters: whatsapp + "/dead-letters",
   replayDeadLetter: (deadLetterId) => whatsapp + "/dead-letters/" + encodeURIComponent(deadLetterId) + "/replay",
 
@@ -85,6 +89,9 @@ export const currentBackendApi = Object.freeze([
   { key: "resolve", method: "POST", path: apiPaths.resolve(":conversationId"), purpose: "Resolve conversation" },
   { key: "reopen", method: "POST", path: apiPaths.reopen(":conversationId"), purpose: "Reopen conversation" },
   { key: "setAutomation", method: "POST", path: apiPaths.automation(":conversationId", ":action"), purpose: "Pause/resume automation" },
+  { key: "createAiDraft", method: "POST", path: apiPaths.aiDrafts, purpose: "Create human-review AI reply draft" },
+  { key: "aiDraft", method: "GET", path: apiPaths.aiDraft(":commandId"), purpose: "AI draft command readback" },
+  { key: "aiDraftResult", method: "GET", path: apiPaths.aiDraftResult(":commandId"), purpose: "AI draft result readback" },
   { key: "deadLetters", method: "GET", path: apiPaths.deadLetters, purpose: "Dead-letter list" },
   { key: "replayDeadLetter", method: "POST", path: apiPaths.replayDeadLetter(":deadLetterId"), purpose: "Dead-letter replay" },
   { key: "operation", method: "GET", path: apiPaths.operation(":operationId"), purpose: "Middleware operation readback" },

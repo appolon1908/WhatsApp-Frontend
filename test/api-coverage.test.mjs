@@ -18,6 +18,9 @@ const browserOpenApi = new Set([
   "POST /platform/v1/whatsapp/conversations/:conversationId/resolve",
   "POST /platform/v1/whatsapp/conversations/:conversationId/reopen",
   "POST /platform/v1/whatsapp/conversations/:conversationId/automation/:action",
+  "POST /platform/v1/whatsapp/ai/drafts",
+  "GET /platform/v1/whatsapp/ai/drafts/:commandId",
+  "GET /platform/v1/whatsapp/ai/drafts/:commandId/result",
   "GET /platform/v1/whatsapp/dead-letters",
   "POST /platform/v1/whatsapp/dead-letters/:deadLetterId/replay",
   "GET /platform/v1/whatsapp/operations/:operationId",
@@ -37,9 +40,9 @@ const browserOpenApi = new Set([
   "PATCH /platform/v1/whatsapp/campaigns/:campaignId"
 ]);
 
-test("frontend catalog covers all 31 browser-facing operations in WhatsApp PR #11", () => {
+test("frontend catalog covers all 34 browser-facing operations in the WhatsApp AI draft contract", () => {
   const frontend = new Set(currentBackendApi.map((item) => item.method + " " + decodeURIComponent(item.path)));
-  assert.equal(frontend.size, 31);
+  assert.equal(frontend.size, 34);
   assert.deepEqual(frontend, browserOpenApi);
 });
 
@@ -100,4 +103,19 @@ test("professional UX keeps critical controls interactive and fail-closed", () =
   assert.ok(source.includes('disabled={safeMode || !sendText.trim() || actionBusy === "send"}'));
   assert.ok(source.includes('api.setAutomation('));
   assert.ok(source.includes('api.escalate('));
+});
+
+
+test("AI assistant is draft-only and never auto-sends", () => {
+  const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const api = fs.readFileSync(new URL("../src/api.js", import.meta.url), "utf8");
+  for (const required of [
+    "Suggest reply", "Rewrite", "Shorter", "More professional", "Translate", "Summarize", "Knowledge answer",
+    "Draft-only · human review required · never auto-sends",
+    "Use this draft", "Nothing was sent."
+  ]) assert.ok(app.includes(required), "missing AI UX contract: " + required);
+  for (const required of ["createAiDraft:", "aiDraft:", "aiDraftResult:"]) {
+    assert.ok(api.includes(required), "missing AI API binding: " + required);
+  }
+  assert.ok(!app.includes('api.sendMessage({\n        contact_id: contact.contact_id,\n        campaign_id: "agent-console-direct",\n        message: { type: "text", text: aiPreview'));
 });
