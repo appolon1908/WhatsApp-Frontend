@@ -35,7 +35,8 @@ test("forms use only non-persistent business-policy validation APIs",()=>{
  assert.match(nginx,/client_max_body_size 8k/);
  assert.match(nginx,/proxy_set_header Authorization ""/);
  assert.doesNotMatch(nginx,/proxy_pass[^\n]*\/messages/);
- assert.doesNotMatch(nginx,/proxy_pass[^\n]*\/internal/);
+ assert.match(nginx,/proxy_pass http:\/\/whatsapp-api:8782\/internal\/v1\/whatsapp\/phone-accounts/);
+ assert.doesNotMatch(nginx,/proxy_pass[^\n]*\/internal\/v1\/whatsapp\/transport/);
 });
 test("gateway denies every unlisted API or adapter route",()=>{
  const nginx=read("nginx.conf");
