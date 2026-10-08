@@ -2,13 +2,13 @@
 
 Codestra WhatsApp is a standalone web frontend backed by the Codestra WhatsApp business-policy API and a private Evolution / Meta provider adapter. The deployed interface is a **safe-mode staging workspace, not yet a live customer inbox**.
 
-**Live deployment:** `https://whatsapp.codestra.co/` for authorized private-network users. Public access is blocked at Caddy with HTTP 403 until proper per-agent identity is integrated. Server 3 hosts the frontend and two Node backends in isolated Docker networks; the Middleware server remains separate.
+**Live deployment:** `https://whatsapp.codestra.co/`. Private LAN/Tailscale clients can open the read-only dashboard directly; external users now receive an HTTPS Basic Authentication challenge (HTTP 401 until credentials are supplied). The fallback login is a staging access gate, not Keycloak agent identity. Credentials are stored only on `s1-middleware` in `/etc/codestra/secrets/whatsapp-dashboard-access` (root-readable). No credentials are committed or printed by the app. Server 3 hosts the frontend and two Node backends in isolated Docker networks; Middleware remains a separate server.
 
 ## Implemented and verified
 
 | Workspace section | Implemented functionality |
 | --- | --- |
-| Overview | Actual API and adapter health, fail-closed send state, Middleware registration status, live in-session samples |
+| Overview | Actual business API, provider adapter and Middleware V3 connectivity, fail-closed send state, command registration readiness and live in-session samples |
 | Inbox | Honest "not connected" screen; no fabricated customer data |
 | Contacts | Live backend strict opt-in eligibility checker, without saving recipients |
 | Campaigns | Live backend campaign draft validator; bulk approval is required when the audience has more than one recipient |
@@ -43,11 +43,11 @@ The browser suite checks UI pages, real positive/negative policy decisions, chan
 ## Architecture and release boundary
 
 ```text
-Private browser → Caddy verified HTTPS + private IP allowlist
+Private browser or external authenticated browser → Caddy verified HTTPS + Basic Auth for external clients
  → Nginx frontend :3082
  → WhatsApp business-policy API :8782 (private Docker only)
  → Evolution / Meta adapter :8781 (private Docker only)
- → Middleware V3 command authority (NOT YET CERTIFIED / REGISTERED)
+ → Caddy read-only Middleware V3 readiness probe (live and verified)\n → Middleware V3 command authority (NOT YET CERTIFIED / REGISTERED)
 ```
 
 Frontend project owns no Middleware ledger, provider retries, idempotency, reconciliation, or authoritative consent database. Full inbox, template registry, Keycloak role-based access, campaign persistence, automated delivery, provider session setup and historical reporting are **not implemented**. Do not count them as completed.
