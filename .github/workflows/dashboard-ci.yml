@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [development, testing, staging, production, main, "feat/safe-staging-console-20261008"]
   push:
-    branches: [development, testing, staging, production]
+    branches: [development, testing, staging, production, "feat/phone-enrollment-staging-20261008"]
   workflow_dispatch:
 
 permissions:
@@ -29,7 +29,9 @@ jobs:
       - name: Run no-effects dashboard tests
         run: node --test test/frontend.test.mjs test/phone-accounts.test.mjs
       - name: Validate staging Compose contract
-        run: |\n          docker compose -f deploy/compose.staging.yml config --quiet\n          docker compose -f deploy/compose.preview.yml config --quiet
+        run: |
+          docker compose -f deploy/compose.staging.yml config --quiet
+          docker compose -f deploy/compose.preview.yml config --quiet
       - name: Build exact dashboard source
         run: docker build --tag codestra-whatsapp-frontend-ci .
       - name: Validate Nginx with isolated mock DNS
