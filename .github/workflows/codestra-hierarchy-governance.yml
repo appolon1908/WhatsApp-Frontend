@@ -18,13 +18,23 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
           persist-credentials: false
+      - name: Install pinned YAML parser
+        run: python3 -m pip install --disable-pip-version-check --no-cache-dir PyYAML==6.0.2
       - name: Validate fail-closed control plane
         shell: python
         run: |
           import pathlib, yaml
           data = yaml.safe_load(pathlib.Path(".codestra/control-plane.yml").read_text())
           assert data["promotion"]["chain"] == ["development","testing","staging","production"]
+          for key in ("require_exact_sha", "require_clean_worktree", "require_review"):
+              assert data["promotion"][key] is True, f"promotion gate {key} must remain enabled"
           assert data["promotion"]["force_push_allowed"] is False
+          profile = yaml.safe_load(pathlib.Path(".codestra/repository-profile.yaml").read_text())
+          assert profile["repository"] == "appolon1908/WhatsApp-Frontend"
+          assert data["promotion"]["chain"] == profile["lifecycle"]["promotion_order"], "promotion sources diverge"
+          assert data["promotion"]["force_push_allowed"] is profile["governance"]["force_push_allowed"], "force push policy diverges"
+          for key in ("development", "testing", "staging", "production"):
+              assert data["authority"][key + "_branch"] == profile["lifecycle"][key], "branch authority diverges"
           for key in ("production_go","live_capabilities_enabled","external_effects_enabled","whatsapp_send_enabled","provider_activation_enabled"):
               assert data["effects"][key] is False
           assert len(data["sections"]) == 8
