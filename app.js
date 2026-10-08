@@ -4,7 +4,7 @@
 const $ = (id) => document.getElementById(id);
 const pages = Object.freeze(["overview","inbox","contacts","campaigns","templates","automations","channels","activity","diagnostics","settings"]);
 const labels = Object.freeze({overview:"Overview",inbox:"Inbox",contacts:"Contacts",campaigns:"Campaigns",templates:"Templates",automations:"Automations",channels:"Channels",activity:"Activity",diagnostics:"Diagnostics",settings:"Settings"});
-const endpoints = Object.freeze({app:"/api/healthz",appReady:"/api/readyz",adapter:"/adapter/healthz",adapterReady:"/adapter/readyz"});
+const endpoints = Object.freeze({app:"/api/healthz",appReady:"/api/readyz",adapter:"/adapter/healthz",adapterReady:"/adapter/readyz",middleware:"/api/integrations/middleware"});
 const state = {samples:[],events:[],latest:null,updating:false};
 const reasons = Object.freeze({
  suppressed:"Contact is on the suppression list", opted_out:"Contact has explicitly opted out",
@@ -45,12 +45,12 @@ function navigate(value) {
  window.scrollTo({top:0,behavior:"instant"});
 }
 async function getJson(url) {
- const response=await fetch(url,{cache:"no-store",headers:{accept:"application/json"},credentials:"omit",signal:AbortSignal.timeout(7000)});
+ const response=await fetch(url,{cache:"no-store",headers:{accept:"application/json"},credentials:"same-origin",signal:AbortSignal.timeout(7000)});
  if(!response.ok) throw new Error("HTTP "+response.status);
  return await response.json();
 }
 async function postJson(url,payload) {
- const response=await fetch(url,{method:"POST",headers:{"content-type":"application/json",accept:"application/json"},credentials:"omit",body:JSON.stringify(payload),signal:AbortSignal.timeout(7000)});
+ const response=await fetch(url,{method:"POST",headers:{"content-type":"application/json",accept:"application/json"},credentials:"same-origin",body:JSON.stringify(payload),signal:AbortSignal.timeout(7000)});
  if(response.status!==200&&response.status!==422) throw new Error("API returned HTTP "+response.status);
  return {code:response.status,data:await response.json()};
 }
@@ -104,13 +104,17 @@ async function refresh({record=true}={}) {
  const controls=[$("refresh"),...document.querySelectorAll("[data-refresh]")];
  for(const button of controls)button.disabled=true;
  try {
-  const [app,appReady,adapter,adapterReady]=await Promise.allSettled([
-   getJson(endpoints.app),getJson(endpoints.appReady),getJson(endpoints.adapter),getJson(endpoints.adapterReady)
+  const [app,appReady,adapter,adapterReady,middleware]=await Promise.allSettled([
+   getJson(endpoints.app),getJson(endpoints.appReady),getJson(endpoints.adapter),getJson(endpoints.adapterReady),getJson(endpoints.middleware)
   ]);
   const appUp=wasHealthy(app),adapterUp=wasHealthy(adapter);
   renderCard("app-health",appUp,appUp?"API responded successfully":"Health check did not succeed");
   renderCard("adapter-health",adapterUp,adapterUp?"Provider adapter responding":"Adapter health check failed");
   text("connection-api",appUp?"Online":"Unavailable");text("connection-adapter",adapterUp?"Online":"Unavailable");
+  const middlewareUp=middleware.status==="fulfilled" && middleware.value?.status==="ready" && middleware.value?.service==="middleware-integration-api";
+  text("connection-middleware",middlewareUp?"Online":"Unavailable");
+  setClass("connection-middleware",middlewareUp?"":"amber");
+  text("diagnostic-middleware",middlewareUp?"Online · verified via edge":"Unavailable");
   const ready=appReady.status==="fulfilled"?appReady.value:null;
   if(ready?.safe_mode===true){text("send-mode","Locked");setClass("send-mode","stat-value amber");}
   else{ text("send-mode",ready?"REVIEW":"Unknown");setClass("send-mode","stat-value error"); }
@@ -124,7 +128,8 @@ async function refresh({record=true}={}) {
   const appResult={health:asResult(app,publicApiResult),ready:asResult(appReady,v=>({status:v.status??"unknown",safe_mode:v.safe_mode===true,middleware_command_type_configured:v.middleware_command_type_configured===true,registry_dependency:v.registry_dependency??null}))};
   const adapterResult={health:asResult(adapter,publicAdapterResult),ready:asResult(adapterReady,v=>({safe_mode:v.safe_mode===true,providers:{evolution:{configured:v.providers?.evolution?.configured===true},meta:{configured:v.providers?.meta?.configured===true}}}))};
   const last=new Date().toISOString();
-  state.latest={timestamp:last,app:appResult,adapter:adapterResult};
+  const middlewareResult=asResult(middleware,v=>({status:v.status??"unknown",service:v.service??"unknown",delivery:v.delivery??"unknown",checked_at:v.checked_at??null}));
+  state.latest={timestamp:last,app:appResult,adapter:adapterResult,middleware:middlewareResult};
   text("api-json",JSON.stringify(appResult,null,2));
   text("adapter-json",JSON.stringify(adapterResult,null,2));
   text("api-code",appUp?"200 OK":"FAILED");text("adapter-code",adapterUp?"200 OK":"FAILED");
