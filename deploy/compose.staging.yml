@@ -7,7 +7,7 @@ services:
     image: node:22-alpine
     working_dir: /app
     command: ["node", "src/server.mjs"]
-    volumes: ["../../whatsapp-app:/app:ro"]
+    volumes: ["../../whatsapp-app:/app:ro", "../../data/phone-accounts:/data:rw", "../../private/phone-admin-token:/run/secrets/phone-admin-token:ro", "../../private/adapter-service-token:/run/secrets/adapter-service-token:ro"]
     environment:
       PORT: "8782"
       WHATSAPP_PRODUCTION_SEND: "false"
@@ -16,6 +16,11 @@ services:
       WHATSAPP_EXTERNAL_RECIPIENTS: "false"
       MIDDLEWARE_BASE_URL: "http://middleware-integration-api:8095"
       MIDDLEWARE_COMMAND_TYPE: ""
+      PHONE_ACCOUNTS_FILE: "/data/accounts.json"
+      PHONE_ADMIN_TOKEN_FILE: "/run/secrets/phone-admin-token"
+      ADAPTER_SERVICE_KEY_FILE: "/run/secrets/adapter-service-token"
+      ADAPTER_ENROLLMENT_URL: "http://evolution-adapter:8781"
+      PHONE_ENROLLMENT_EFFECTS_ENABLED: "false"
     networks: [whatsapp_private]
     read_only: true
     tmpfs: [/tmp]
@@ -35,13 +40,14 @@ services:
     image: node:22-alpine
     working_dir: /app
     command: ["node", "src/server.mjs"]
-    volumes: ["../../evolution-adapter:/app:ro"]
+    volumes: ["../../evolution-adapter:/app:ro", "../../private/adapter-service-token:/run/secrets/adapter-service-token:ro"]
     environment:
       PORT: "8781"
       EXTERNAL_SEND_ENABLED: "false"
       FORWARD_EVENTS_ENABLED: "false"
       MIDDLEWARE_BASE_URL: "http://middleware-integration-api:8095"
-      ADAPTER_SERVICE_TOKEN: ""
+      ADAPTER_SERVICE_TOKEN_FILE: "/run/secrets/adapter-service-token"
+      PROVIDER_ENROLLMENT_ENABLED: "false"
     networks: [whatsapp_private]
     read_only: true
     tmpfs: [/tmp]
