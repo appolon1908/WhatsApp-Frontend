@@ -1,0 +1,80 @@
+# Source-controlled safe staging example.
+# Layout: parent/{whatsapp-app,evolution-adapter,frontend}
+# Run from parent: sudo STAGING_BIND_IP=10.0.0.218 docker compose -f frontend/deploy/compose.staging.yml up -d --build
+name: codestra-whatsapp-staging
+services:
+  whatsapp-api:
+    image: node:22-alpine
+    working_dir: /app
+    command: ["node", "src/server.mjs"]
+    volumes: ["../../whatsapp-app:/app:ro"]
+    environment:
+      PORT: "8782"
+      WHATSAPP_PRODUCTION_SEND: "false"
+      WHATSAPP_BULK_SEND: "false"
+      WHATSAPP_AI_AUTOREPLY: "false"
+      WHATSAPP_EXTERNAL_RECIPIENTS: "false"
+      MIDDLEWARE_BASE_URL: "http://middleware-integration-api:8095"
+      MIDDLEWARE_COMMAND_TYPE: ""
+    networks: [whatsapp_private]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.50
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:8782/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 7s
+      retries: 3
+      start_period: 15s
+  evolution-adapter:
+    image: node:22-alpine
+    working_dir: /app
+    command: ["node", "src/server.mjs"]
+    volumes: ["../../evolution-adapter:/app:ro"]
+    environment:
+      PORT: "8781"
+      EXTERNAL_SEND_ENABLED: "false"
+      FORWARD_EVENTS_ENABLED: "false"
+      MIDDLEWARE_BASE_URL: "http://middleware-integration-api:8095"
+      ADAPTER_SERVICE_TOKEN: ""
+    networks: [whatsapp_private]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.50
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:8781/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 7s
+      retries: 3
+      start_period: 15s
+  frontend:
+    build:
+      context: ..
+    ports: ["${STAGING_BIND_IP:-127.0.0.1}:3082:8080"]
+    depends_on:
+      whatsapp-api: {condition: service_healthy}
+      evolution-adapter: {condition: service_healthy}
+    networks: [whatsapp_private, whatsapp_ingress]
+    read_only: true
+    tmpfs: [/tmp, /var/cache/nginx, /var/run]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 128m
+    cpus: 0.50
+    restart: unless-stopped
+networks:
+  whatsapp_private:
+    internal: true
+  whatsapp_ingress:
+    driver: bridge
