@@ -53,3 +53,15 @@ test("dashboard does not persist recipient or campaign forms",()=>{
  assert.match(js,/document\.createTextNode|textContent=/);
  assert.doesNotMatch(js,/document\.cookie|localStorage|innerHTML/);
 });
+
+test("public authentication is reused only for same-origin API requests",()=>{
+ const js=read("app.js");
+ assert.match(js,/credentials:"same-origin"/);
+ assert.doesNotMatch(js,/credentials:"omit"/);
+ assert.match(js,/middleware:"\\/api\\/integrations\\/middleware"/);
+ assert.match(js,/middlewareUp=middleware.status==="fulfilled"/);
+ const html=read("index.html");
+ assert.match(html,/id="connection-middleware"/);
+ assert.match(html,/id="diagnostic-middleware"/);
+ assert.doesNotMatch(js,/fetch\\(["']https:\\/\\/.*\\/platform\\/v1\\/commands/);
+});
