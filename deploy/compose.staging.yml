@@ -5,6 +5,7 @@ name: codestra-whatsapp-staging
 services:
   whatsapp-api:
     image: node:22-alpine
+    user: "1000:1000"
     working_dir: /app
     command: ["node", "src/server.mjs"]
     volumes: ["../../whatsapp-app:/app:ro", "../../data/phone-accounts:/data:rw", "../../private/phone-admin-token:/run/secrets/phone-admin-token:ro", "../../private/adapter-service-token:/run/secrets/adapter-service-token:ro"]
@@ -38,6 +39,7 @@ services:
       start_period: 15s
   evolution-adapter:
     image: node:22-alpine
+    user: "1000:1000"
     working_dir: /app
     command: ["node", "src/server.mjs"]
     volumes: ["../../evolution-adapter:/app:ro", "../../private/adapter-service-token:/run/secrets/adapter-service-token:ro"]
