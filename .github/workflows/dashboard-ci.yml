@@ -1,0 +1,44 @@
+name: WhatsApp Dashboard CI
+
+on:
+  pull_request:
+    branches: [development, testing, staging, production, main, "feat/safe-staging-console-20261008", "feat/phone-enrollment-staging-20261008"]
+  push:
+    branches: [development, testing, staging, production, "feat/phone-enrollment-staging-20261008", "hardening/phone-production-readiness-20261008"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Dashboard tests and Nginx certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate JavaScript syntax
+        run: node --check app.js && node --check phone-accounts.js && node --check phone-auth.js
+      - name: Run no-effects dashboard tests
+        run: node --test test/frontend.test.mjs test/phone-accounts.test.mjs test/phone-oidc-ui.test.mjs test/phone-release-ui.test.mjs
+      - name: Validate staging Compose contract
+        run: |
+          docker compose -f deploy/compose.staging.yml config --quiet
+          docker compose -f deploy/compose.preview.yml config --quiet
+      - name: Build exact dashboard source
+        run: docker build --tag codestra-whatsapp-frontend-ci .
+      - name: Validate Nginx with isolated mock DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create dashboard-ci
+          trap 'docker rm -f dashboard-ci-upstream >/dev/null 2>&1 || true; docker network rm dashboard-ci >/dev/null 2>&1 || true' EXIT
+          docker run -d --name dashboard-ci-upstream --network dashboard-ci --network-alias whatsapp-api --network-alias evolution-adapter nginx:1.29-alpine
+          docker run --rm --network dashboard-ci --entrypoint nginx codestra-whatsapp-frontend-ci -t
