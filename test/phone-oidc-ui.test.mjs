@@ -34,3 +34,14 @@ test("OIDC UI is optional in staging and phone routes remain individually protec
  assert.match(nginx,/location \^~ \/adapter\/ \{ return 404;/);
  assert.doesNotMatch(nginx,/proxy_pass[^\n]*\/enrollment\/execute/);
 });
+
+test("Nginx drops HTTP Basic credentials but forwards signed Bearer headers to phone APIs",()=>{
+ const nginx=read("nginx.conf");
+ assert.match(nginx,/map \$http_authorization \$phone_admin_bearer/);
+ assert.match(nginx,/default "";/);
+ assert.match(nginx,/proxy_set_header Authorization \$phone_admin_bearer/);
+ const idx=nginx.indexOf("location = /api/phone-accounts");
+ assert.ok(idx>0);
+ assert.match(nginx.slice(idx),/proxy_set_header Authorization \$phone_admin_bearer/);
+ assert.match(nginx,/proxy_set_header Authorization ""/);
+});
