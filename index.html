@@ -8,6 +8,7 @@
 <title>Codestra · WhatsApp Operations</title>
 <link rel="stylesheet" href="/styles.css">
 <script src="/app.js" defer></script>
+<script src="/phone-auth.js" defer></script>
 <script src="/phone-accounts.js" defer></script>
 </head>
 <body>
@@ -65,6 +66,13 @@
         <div class="page-heading"><div><p class="eyebrow">MANAGEMENT / PHONE ACCOUNTS</p><h1 id="phone-accounts-title">Phone number management<span class="heading-accent">.</span></h1><p class="subhead">Official Meta Business registration and existing-account Evolution QR pairing. Staging preserves registration drafts; all provider enrollment effects and customer messaging remain disabled.</p></div><span class="tag warning">ENROLLMENT LOCKED · STAGING</span></div>
         <div class="two-columns form-layout">
           <article class="surface"><div class="surface-header"><div><h2>Administrator access</h2><p>Separate enrollment admin key. Never saved in browser storage.</p></div></div>
+            <p id="phone-oidc-status" class="info-paragraph" role="status" aria-live="polite">Checking identity configuration…</p>
+            <button type="button" class="btn primary" id="phone-oidc-login" hidden>Sign in with Keycloak</button>
+            <form id="phone-oidc-access-form" class="form" hidden>
+              <label for="phone-oidc-tenant">Authorized tenant</label>
+              <input id="phone-oidc-tenant" value="CODESTRA" pattern="[A-Za-z0-9_-]{2,64}" required autocomplete="off">
+              <button class="btn" type="submit">Load my authorized phone accounts</button>
+            </form>
             <form id="phone-access-form" class="form">
               <label for="phone-tenant">Tenant / business code</label><input id="phone-tenant" value="CODESTRA" maxlength="64" required pattern="[A-Za-z0-9_-]{2,64}" autocomplete="off" spellcheck="false">
               <label for="phone-token">Enrollment administrator key</label><input id="phone-token" type="password" required minlength="24" autocomplete="off" placeholder="Paste private staging enrollment key">
