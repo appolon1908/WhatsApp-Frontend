@@ -8,6 +8,7 @@
 <title>Codestra · WhatsApp Operations</title>
 <link rel="stylesheet" href="/styles.css">
 <script src="/app.js" defer></script>
+<script src="/phone-auth.js" defer></script>
 <script src="/phone-accounts.js" defer></script>
 </head>
 <body>
@@ -65,6 +66,13 @@
         <div class="page-heading"><div><p class="eyebrow">MANAGEMENT / PHONE ACCOUNTS</p><h1 id="phone-accounts-title">Phone number management<span class="heading-accent">.</span></h1><p class="subhead">Official Meta Business registration and existing-account Evolution QR pairing. Staging preserves registration drafts; all provider enrollment effects and customer messaging remain disabled.</p></div><span class="tag warning">ENROLLMENT LOCKED · STAGING</span></div>
         <div class="two-columns form-layout">
           <article class="surface"><div class="surface-header"><div><h2>Administrator access</h2><p>Separate enrollment admin key. Never saved in browser storage.</p></div></div>
+            <p id="phone-oidc-status" class="info-paragraph" role="status" aria-live="polite">Checking identity configuration…</p>
+            <button type="button" class="btn primary" id="phone-oidc-login" hidden>Sign in with Keycloak</button>
+            <form id="phone-oidc-access-form" class="form" hidden>
+              <label for="phone-oidc-tenant">Authorized tenant</label>
+              <input id="phone-oidc-tenant" value="CODESTRA" pattern="[A-Za-z0-9_-]{2,64}" required autocomplete="off">
+              <button class="btn" type="submit">Load my authorized phone accounts</button>
+            </form>
             <form id="phone-access-form" class="form">
               <label for="phone-tenant">Tenant / business code</label><input id="phone-tenant" value="CODESTRA" maxlength="64" required pattern="[A-Za-z0-9_-]{2,64}" autocomplete="off" spellcheck="false">
               <label for="phone-token">Enrollment administrator key</label><input id="phone-token" type="password" required minlength="24" autocomplete="off" placeholder="Paste private staging enrollment key">
@@ -105,6 +113,13 @@
         <article class="surface bottom-grid"><div class="surface-header"><div><h2>Managed phone accounts</h2><p>Server-side drafts with tenant isolation, duplicate prevention, optimistic version checks, and an audit trail.</p></div><button class="btn" id="phone-refresh" type="button">Refresh accounts</button></div>
           <div id="phone-accounts-list" class="phone-accounts-list" role="list"><p class="privacy-note">Enter administrator access above to view your tenant's accounts.</p></div>
           <p role="status" aria-live="polite" id="phone-feedback" class="info-paragraph">Waiting for admin access.</p>
+        </article>
+        <article class="surface bottom-grid" aria-labelledby="phone-release-title">
+          <div class="surface-header"><div><h2 id="phone-release-title">Production release gates</h2>
+            <p>Real controls returned by the authenticated Codestra backend. No provider effects are enabled by this panel.</p>
+          </div><button class="btn" type="button" id="phone-release-refresh">Refresh readiness</button></div>
+          <strong id="phone-release-status" class="amber" role="status">Not certified</strong>
+          <ul id="phone-release-gates" class="activity-list"><li class="activity-empty">Authenticate to load release evidence.</li></ul>
         </article>
       </section>
       <section id="view-channels" class="view" hidden aria-labelledby="channels-title"><div class="page-heading"><div><p class="eyebrow">MANAGEMENT / CHANNELS</p><h1 id="channels-title">Channel connections<span class="heading-accent">.</span></h1><p class="subhead">Actual provider adapter configuration signals from the service.</p></div><button class="btn" type="button" data-refresh>↻ Refresh</button></div><div class="two-columns"><article class="surface"><div class="surface-header"><div><h2>Provider status</h2><p>Provider credentials are never displayed</p></div></div><div class="provider-row"><span class="provider-logo">E</span><div><strong>Evolution / Baileys</strong><small>Provider connection</small></div><strong id="provider-evolution" class="provider-state">Checking…</strong></div><div class="provider-row"><span class="provider-logo meta">M</span><div><strong>Meta Cloud API</strong><small>Provider connection</small></div><strong id="provider-meta" class="provider-state">Checking…</strong></div></article><article class="surface"><div class="surface-header"><div><h2>Messaging authority</h2><p>One-way command path and provider boundaries</p></div></div><div class="path-diagram"><div>Agent dashboard</div><span>↓</span><div>Codestra WhatsApp API</div><span>↓</span><div class="gate-box">Middleware V3 <small>Unregistered WhatsApp command</small></div><span>↓</span><div>Evolution / Meta provider adapter</div></div></article></div></section>

@@ -26,7 +26,7 @@ test("Nginx only forwards token-guarded phone endpoints, never internal adapter 
  const cfg=read("nginx.conf");
  assert.match(cfg,/location = \/api\/phone-accounts/);
  assert.match(cfg,/location \^~ \/api\/phone-accounts\//);
- assert.match(cfg,/proxy_pass http:\/\/whatsapp-api:8782\/internal\/v1\/whatsapp\/phone-accounts/);
+ assert.match(cfg,/proxy_pass http:\/\/\$whatsapp_backend\/internal\/v1\/whatsapp\/phone-accounts/);
  assert.match(cfg,/location \^~ \/adapter\/ \{ return 404;/);
  assert.doesNotMatch(cfg,/proxy_pass[^\n]*\/enrollment\/execute/);
  assert.match(cfg,/limit_req zone=policy_validation/);

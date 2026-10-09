@@ -2,9 +2,9 @@ name: WhatsApp Dashboard CI
 
 on:
   pull_request:
-    branches: [development, testing, staging, production, main, "feat/safe-staging-console-20261008"]
+    branches: [development, testing, staging, production, main, "feat/safe-staging-console-20261008", "feat/phone-enrollment-staging-20261008"]
   push:
-    branches: [development, testing, staging, production, "feat/phone-enrollment-staging-20261008"]
+    branches: [development, testing, staging, production, "feat/phone-enrollment-staging-20261008", "hardening/phone-production-readiness-20261008"]
   workflow_dispatch:
 
 permissions:
@@ -25,9 +25,9 @@ jobs:
         with:
           node-version: '22'
       - name: Validate JavaScript syntax
-        run: node --check app.js && node --check phone-accounts.js
+        run: node --check app.js && node --check phone-accounts.js && node --check phone-auth.js
       - name: Run no-effects dashboard tests
-        run: node --test test/frontend.test.mjs test/phone-accounts.test.mjs
+        run: node --test test/frontend.test.mjs test/phone-accounts.test.mjs test/phone-oidc-ui.test.mjs test/phone-release-ui.test.mjs
       - name: Validate staging Compose contract
         run: |
           docker compose -f deploy/compose.staging.yml config --quiet

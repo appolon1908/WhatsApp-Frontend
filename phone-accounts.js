@@ -4,8 +4,10 @@
  let adminKey="",tenant="",records=[],chosen=null;
  const feedback=(msg,error=false)=>{const p=$("phone-feedback");p.textContent=msg;p.className=error?"info-paragraph amber":"info-paragraph";};
  const req=async(method,route,payload,extra={})=>{
-   if(!adminKey||!tenant)throw Error("Enter the private administrator key and tenant first.");
-   const headers={"x-phone-admin-token":adminKey,"x-tenant-id":tenant,accept:"application/json",...extra};
+   const bearer=window.CodestraPhoneOIDC?.accessToken?.()||null;
+   if((!adminKey&&!bearer)||!tenant)throw Error("Sign in with Keycloak or use the staging administrator key and tenant first.");
+   const headers={...(bearer?{authorization:"Bearer "+bearer}:{"x-phone-admin-token":adminKey}),
+      "x-tenant-id":tenant,accept:"application/json",...extra};
    if(payload!==undefined)headers["content-type"]="application/json";
    const res=await fetch("/api/phone-accounts"+route,{method,headers,credentials:"same-origin",cache:"no-store",
      ...(payload===undefined?{}:{body:JSON.stringify(payload)}),signal:AbortSignal.timeout(10000)});
@@ -70,10 +72,28 @@
    }
    if(chosen){const refreshed=records.find(x=>x.id===chosen.id);setSelected(refreshed||null);}
  }
+ async function readReadiness(){
+   const bearer=window.CodestraPhoneOIDC?.accessToken?.()||null;
+   if((!adminKey&&!bearer)||!tenant)throw new Error("Authenticate to inspect release gates.");
+   const headers={...(bearer?{authorization:"Bearer "+bearer}:{"x-phone-admin-token":adminKey}),"x-tenant-id":tenant,accept:"application/json"};
+   const resp=await fetch("/api/phone-readiness",{method:"GET",headers,credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(8000)});
+   if(!resp.ok)throw new Error("Readiness endpoint denied access (HTTP "+resp.status+").");
+   const data=await resp.json();
+   const list=$("phone-release-gates");list.replaceChildren();
+   for(const [name,passed] of Object.entries(data.gates||{})){
+     const entry=el("li");
+     const title=el("strong",(passed===true?"✓ ":"✕ ")+name.replaceAll("_"," "));
+     title.className=passed===true?"":"amber";
+     entry.append(title);list.append(entry);
+   }
+   $("phone-release-status").textContent=data.production_approved===true?"Production authorization requires independent review":
+     data.status==="ready_for_staged_activation"?"Ready for activation review — NOT live":"Blocked — production GO = NO";
+ }
  async function load(){
    const result=await req("GET","");
    records=Array.isArray(result.items)?result.items:[];
    render();feedback(records.length+" account(s) loaded for "+tenant+". Provider enrollment effects remain locked.");
+   await readReadiness().catch(e=>{$("phone-release-status").textContent="Readiness check failed: "+e.message;});
  }
  async function authorize(event){
    event.preventDefault();
@@ -83,7 +103,7 @@
  }
  async function create(event){
    event.preventDefault();
-   if(!adminKey){feedback("Load administrator access first.",true);return;}
+   if(!adminKey&&!window.CodestraPhoneOIDC?.accessToken?.()){feedback("Authenticate before creating phone accounts.",true);return;}
    const provider=$("phone-provider").value;
    const data={
      provider,tenant_id:tenant,label:$("phone-label").value.trim(),
@@ -114,10 +134,32 @@
      await load();feedback(mode+" completed for "+chosen.label+". Sending remains disabled.");
    }catch(e){$("phone-code").value="";$("phone-pin").value="";feedback(e.message,true);}
  }
+ async function initializeIdentity(){
+   try {
+     const auth=await window.CodestraPhoneOIDC.initialize();
+     const isOIDC=auth.mode==="oidc";
+     const form=$("phone-oidc-access-form");form.hidden=!isOIDC;
+     if(isOIDC&&auth.resumed){
+       tenant=$("phone-oidc-tenant").value.trim();
+       await load();
+     }
+   }catch(e){feedback("Identity setup failed: "+e.message,true);}
+ }
+ $("phone-oidc-login").addEventListener("click",async()=>{
+   try{await window.CodestraPhoneOIDC.begin();}
+   catch(e){feedback("Keycloak login failed: "+e.message,true);}
+ });
+ $("phone-oidc-access-form").addEventListener("submit",async event=>{
+   event.preventDefault();tenant=$("phone-oidc-tenant").value.trim();
+   if(!window.CodestraPhoneOIDC.accessToken()){feedback("Sign in with Keycloak first.",true);return;}
+   try{await load();}catch(e){feedback(e.message,true);}
+ });
+ initializeIdentity();
  $("phone-provider").addEventListener("change",showFields);
  $("phone-access-form").addEventListener("submit",authorize);
  $("phone-create-form").addEventListener("submit",create);
  $("phone-action-form").addEventListener("submit",action);
  $("phone-refresh").addEventListener("click",async()=>{try{await load();}catch(e){feedback(e.message,true);}});
+ $("phone-release-refresh").addEventListener("click",async()=>{try{await readReadiness();}catch(e){feedback(e.message,true);}});
  showFields();
 })();
