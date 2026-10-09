@@ -35,7 +35,8 @@ test("forms use only non-persistent business-policy validation APIs",()=>{
  assert.match(nginx,/client_max_body_size 8k/);
  assert.match(nginx,/proxy_set_header Authorization ""/);
  assert.doesNotMatch(nginx,/proxy_pass[^\n]*\/messages/);
- assert.doesNotMatch(nginx,/proxy_pass[^\n]*\/internal/);
+ assert.match(nginx,/proxy_pass http:\/\/\$whatsapp_backend\/internal\/v1\/whatsapp\/phone-accounts/);
+ assert.doesNotMatch(nginx,/proxy_pass[^\n]*\/internal\/v1\/whatsapp\/transport/);
 });
 test("gateway denies every unlisted API or adapter route",()=>{
  const nginx=read("nginx.conf");
@@ -64,4 +65,13 @@ test("public authentication is reused only for same-origin API requests",()=>{
  assert.match(html,/id="connection-middleware"/);
  assert.match(html,/id="diagnostic-middleware"/);
  assert.ok(!js.includes("/platform/v1/commands"));
+});
+
+test("Docker backend routing dynamically re-resolves service addresses",()=>{
+ const nginx=read("nginx.conf");
+ assert.match(nginx,/resolver 127\.0\.0\.11 valid=5s ipv6=off/);
+ assert.match(nginx,/set \$whatsapp_backend "whatsapp-api:8782"/);
+ assert.match(nginx,/set \$provider_backend "evolution-adapter:8781"/);
+ assert.doesNotMatch(nginx,/proxy_pass http:\/\/whatsapp-api:8782/);
+ assert.doesNotMatch(nginx,/proxy_pass http:\/\/evolution-adapter:8781/);
 });

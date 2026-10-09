@@ -1,7 +1,7 @@
 # Source-controlled safe staging example.
 # Layout: parent/{whatsapp-app,evolution-adapter,frontend}
 # Run from parent: sudo STAGING_BIND_IP=10.0.0.218 docker compose -f frontend/deploy/compose.staging.yml up -d --build
-name: codestra-whatsapp-staging
+name: codestra-whatsapp-phone-preview
 services:
   whatsapp-api:
     image: node:22-alpine
@@ -68,7 +68,7 @@ services:
   frontend:
     build:
       context: ..
-    ports: ["${STAGING_BIND_IP:-127.0.0.1}:3082:8080"]
+    ports: ["${STAGING_BIND_IP:-127.0.0.1}:3093:8080"]
     depends_on:
       whatsapp-api: {condition: service_healthy}
       evolution-adapter: {condition: service_healthy}

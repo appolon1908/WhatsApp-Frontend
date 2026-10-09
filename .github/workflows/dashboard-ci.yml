@@ -2,9 +2,9 @@ name: WhatsApp Dashboard CI
 
 on:
   pull_request:
-    branches: [development, testing, staging, production, main]
+    branches: [development, testing, staging, production, main, "feat/safe-staging-console-20261008", "feat/phone-enrollment-staging-20261008"]
   push:
-    branches: [development, testing, staging, production]
+    branches: [development, testing, staging, production, "feat/phone-enrollment-staging-20261008", "hardening/phone-production-readiness-20261008"]
   workflow_dispatch:
 
 permissions:
@@ -25,11 +25,13 @@ jobs:
         with:
           node-version: '22'
       - name: Validate JavaScript syntax
-        run: node --check app.js
+        run: node --check app.js && node --check phone-accounts.js && node --check phone-auth.js
       - name: Run no-effects dashboard tests
-        run: node --test test/frontend.test.mjs
+        run: node --test test/frontend.test.mjs test/phone-accounts.test.mjs test/phone-oidc-ui.test.mjs test/phone-release-ui.test.mjs
       - name: Validate staging Compose contract
-        run: docker compose -f deploy/compose.staging.yml config --quiet
+        run: |
+          docker compose -f deploy/compose.staging.yml config --quiet
+          docker compose -f deploy/compose.preview.yml config --quiet
       - name: Build exact dashboard source
         run: docker build --tag codestra-whatsapp-frontend-ci .
       - name: Validate Nginx with isolated mock DNS

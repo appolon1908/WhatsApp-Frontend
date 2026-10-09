@@ -2,8 +2,8 @@
 
 // All state is ephemeral, browser-local, and contains no recipient or campaign form values.
 const $ = (id) => document.getElementById(id);
-const pages = Object.freeze(["overview","inbox","contacts","campaigns","templates","automations","channels","activity","diagnostics","settings"]);
-const labels = Object.freeze({overview:"Overview",inbox:"Inbox",contacts:"Contacts",campaigns:"Campaigns",templates:"Templates",automations:"Automations",channels:"Channels",activity:"Activity",diagnostics:"Diagnostics",settings:"Settings"});
+const pages = Object.freeze(["overview","inbox","contacts","campaigns","templates","automations","phone-accounts","channels","activity","diagnostics","settings"]);
+const labels = Object.freeze({overview:"Overview",inbox:"Inbox",contacts:"Contacts",campaigns:"Campaigns",templates:"Templates",automations:"Automations","phone-accounts":"Phone accounts",channels:"Channels",activity:"Activity",diagnostics:"Diagnostics",settings:"Settings"});
 const endpoints = Object.freeze({app:"/api/healthz",appReady:"/api/readyz",adapter:"/adapter/healthz",adapterReady:"/adapter/readyz",middleware:"/api/integrations/middleware"});
 const state = {samples:[],events:[],latest:null,updating:false};
 const reasons = Object.freeze({
